@@ -14,7 +14,11 @@ export interface RelayChannelsState {
   readonly refresh: () => Promise<void>;
   readonly saveChannel: (input: SaveRelayChannelInput) => Promise<RelayChannelView>;
   readonly deleteChannel: (providerId: string) => Promise<void>;
-  readonly fetchModels: (providerId: string, groupId?: string | null) => Promise<readonly string[]>;
+  readonly fetchModels: (
+    providerId: string,
+    groupId?: string | null,
+    options?: { readonly selectedModels?: readonly string[]; readonly save?: boolean },
+  ) => Promise<readonly string[]>;
   readonly service: IRelayChannelService | undefined;
 }
 
@@ -63,9 +67,18 @@ export function useRelayChannels(): RelayChannelsState {
   );
 
   const fetchModels = useCallback(
-    async (providerId: string, groupId?: string | null) => {
+    async (
+      providerId: string,
+      groupId?: string | null,
+      options?: { readonly selectedModels?: readonly string[]; readonly save?: boolean },
+    ) => {
       if (!service) throw new Error("Relay Channel 服务不可用");
-      return service.fetchChannelModels({ providerId, groupId: groupId ?? null });
+      return service.fetchChannelModels({
+        providerId,
+        groupId: groupId ?? null,
+        ...(options?.selectedModels ? { selectedModels: [...options.selectedModels] } : {}),
+        ...(options?.save !== undefined ? { save: options.save } : {}),
+      });
     },
     [service],
   );

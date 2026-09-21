@@ -71,7 +71,7 @@ export function previewRelayKey(key: string): string {
   return maskKey(key);
 }
 
-/** 脱敏后的分组视图：永远不含明文 key。 */
+/** 脱敏后的分组视图：永远不含明文 key。P1.1 加法扩展 keyMode/responseProtocol/baseUrl，用于编辑回填不丢字段。 */
 export interface RelayChannelGroupView {
   readonly groupId: string;
   readonly groupName: string;
@@ -79,6 +79,9 @@ export interface RelayChannelGroupView {
   readonly status: RelayChannelStatus;
   readonly models: readonly string[];
   readonly apiKeyConfigured: boolean;
+  readonly keyMode?: RelayChannelKeyMode;
+  readonly responseProtocol?: RelayChannelResponseProtocol;
+  readonly baseUrl?: string;
 }
 
 export interface RelayChannelView {
@@ -88,6 +91,7 @@ export interface RelayChannelView {
   readonly status: RelayChannelStatus;
   readonly apiKeyConfigured: boolean;
   readonly apiKeyPreview?: string;
+  readonly defaultGroupId?: string;
   readonly groups: readonly RelayChannelGroupView[];
 }
 
@@ -102,5 +106,8 @@ export function toRelayChannelGroupView(
     status: group.status ?? "enabled",
     models: Object.freeze([...(group.models ?? [])]),
     apiKeyConfigured,
+    keyMode: group.keyMode ?? "single",
+    responseProtocol: group.responseProtocol ?? "openai",
+    ...(group.baseUrl ? { baseUrl: group.baseUrl } : {}),
   };
 }

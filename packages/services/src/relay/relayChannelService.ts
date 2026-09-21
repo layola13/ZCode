@@ -122,6 +122,7 @@ export function createRelayChannelService(
       providerName,
       ...(baseUrl ? { baseUrl } : {}),
       status: channel.status ?? "enabled",
+      ...(channel.defaultGroupId ? { defaultGroupId: channel.defaultGroupId } : {}),
       apiKeyConfigured: keys.length > 0,
       ...(keys.length > 0 ? { apiKeyPreview: previewRelayKey(keys[0]!) } : {}),
       groups: Object.freeze(groups.map((group) => toRelayChannelGroupView(group, keys.length > 0))),

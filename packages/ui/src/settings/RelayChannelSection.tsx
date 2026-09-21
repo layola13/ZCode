@@ -1,78 +1,15 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button.js";
 import { useRelayChannels } from "@/hooks/useRelayChannels.js";
-import type { RelayChannelView } from "@zcode/services";
-
-interface GroupDraft {
-  id: string;
-  name: string;
-  baseUrl: string;
-  groupRatio: string;
-  keyMode: "single" | "random" | "polling";
-  responseProtocol: "openai" | "openai-response" | "anthropic" | "gemini";
-  modelsText: string;
-}
-
-interface ChannelDraft {
-  providerId?: string;
-  providerName: string;
-  baseUrl: string;
-  status: "enabled" | "disabled";
-  apiKeysText: string;
-  defaultGroupId: string;
-  groups: GroupDraft[];
-}
-
-const EMPTY_DRAFT: ChannelDraft = {
-  providerName: "",
-  baseUrl: "",
-  status: "enabled",
-  apiKeysText: "",
-  defaultGroupId: "",
-  groups: [
-    {
-      id: "default",
-      name: "default",
-      baseUrl: "",
-      groupRatio: "1",
-      keyMode: "single",
-      responseProtocol: "openai",
-      modelsText: "",
-    },
-  ],
-};
-
-function toDraft(view?: RelayChannelView): ChannelDraft {
-  if (!view) return { ...EMPTY_DRAFT, groups: EMPTY_DRAFT.groups.map((group) => ({ ...group })) };
-  return {
-    providerId: view.providerId,
-    providerName: view.providerName,
-    baseUrl: view.baseUrl ?? "",
-    status: view.status,
-    apiKeysText: "",
-    defaultGroupId: "",
-    groups: view.groups.map((group) => ({
-      id: group.groupId,
-      name: group.groupName,
-      baseUrl: "",
-      groupRatio: String(group.groupRatio),
-      keyMode: "single",
-      responseProtocol: "openai",
-      modelsText: group.models.join("\n"),
-    })),
-  };
-}
-
-function parseModels(text: string): string[] {
-  return [
-    ...new Set(
-      text
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean),
-    ),
-  ];
-}
+import { relayNameConflict } from "@zcode/provider";
+import { RelayChannelEditor } from "./RelayChannelEditor.js";
+import { RelayQuickCreate } from "./RelayQuickCreate.js";
+import {
+  parseKeys,
+  parseModels,
+  toChannelDraft,
+  type ChannelDraft,
+} from "./relayChannelDraft.js";
 
 export function RelayChannelSection() {
   const { available, loading, error, channels, saveChannel, deleteChannel, fetchModels } =
@@ -81,6 +18,8 @@ export function RelayChannelSection() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [fetching, setFetching] = useState<string | null>(null);
+  const [testing, setTesting] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const sorted = useMemo(
@@ -97,16 +36,22 @@ export function RelayChannelSection() {
     setSaving(true);
     setFormError(null);
     try {
+      const name = editing.providerName.trim();
+      if (!name) throw new Error("名称不能为空");
+      const conflict = relayNameConflict(name, channels, editing.providerId);
+      if (conflict) throw new Error(`名称与现有渠道“${conflict}”冲突（归一化后重名）`);
       const ratio = (text: string) => {
         const value = Number(text);
-        return Number.isFinite(value) && value > 0 ? value : 1;
+        return Number.isFinite(value) && value >= 0 ? value : 1;
       };
+      const keys = parseKeys(editing.apiKeysText);
+      if (keys.length > 16) throw new Error("密钥最多 16 个，每行一个");
       await saveChannel({
         ...(editing.providerId ? { providerId: editing.providerId } : {}),
-        providerName: editing.providerName.trim() || undefined,
+        providerName: name,
         baseUrl: editing.baseUrl.trim() || null,
         status: editing.status,
-        ...(editing.apiKeysText.trim() ? { apiKeys: [editing.apiKeysText.trim()] } : {}),
+        ...(keys.length > 0 ? { apiKeys: keys } : {}),
         defaultGroupId: editing.defaultGroupId.trim() || null,
         groups: editing.groups
           .filter((group) => group.id.trim())
@@ -114,7 +59,7 @@ export function RelayChannelSection() {
             id: group.id.trim(),
             name: group.name.trim() || group.id.trim(),
             baseUrl: group.baseUrl.trim() || null,
-            status: "enabled" as const,
+            status: group.status,
             groupRatio: ratio(group.groupRatio),
             keyMode: group.keyMode,
             models: parseModels(group.modelsText),
@@ -141,16 +86,70 @@ export function RelayChannelSection() {
     }
   }
 
+  async function handleTest(providerId: string, groupId: string) {
+    setTesting(`${providerId}:${groupId}`);
+    setTestResult(null);
+    setFormError(null);
+    try {
+      const models = await fetchModels(providerId, groupId, { save: false });
+      setTestResult(`连接正常，发现 ${models.length} 个模型`);
+    } catch (error: unknown) {
+      setFormError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setTesting(null);
+    }
+  }
+
+  async function handleQuickCreate(input: {
+    providerName: string;
+    baseUrl: string;
+    apiKey: string;
+    protocol: ChannelDraft["groups"][number]["responseProtocol"];
+    modelsText: string;
+  }) {
+    setSaving(true);
+    setFormError(null);
+    try {
+      const name = input.providerName.trim();
+      if (!name) throw new Error("快速新建：名称不能为空");
+      const conflict = relayNameConflict(name, channels);
+      if (conflict) throw new Error(`名称与现有渠道“${conflict}”冲突（归一化后重名）`);
+      if (!input.baseUrl.trim()) throw new Error("快速新建：Base URL 不能为空");
+      if (!input.apiKey.trim()) throw new Error("快速新建：密钥不能为空");
+      await saveChannel({
+        providerName: name,
+        baseUrl: input.baseUrl.trim(),
+        status: "enabled",
+        apiKeys: [input.apiKey.trim()],
+        groups: [
+          {
+            id: "default",
+            name: "default",
+            groupRatio: 1,
+            keyMode: "single",
+            models: parseModels(input.modelsText),
+            responseProtocol: input.protocol,
+          },
+        ],
+      });
+    } catch (error: unknown) {
+      setFormError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <p className="text-ui-sm text-foreground-subtle">
-          第三方中转渠道（baseUrl + 密钥 + 分组 + 倍率）。密钥只写不读，留空即保留。
+          第三方中转渠道（baseUrl + 密钥 + 分组 + 倍率）。密钥只写不读，留空即保留。×0
+          表示免费。
         </p>
         <Button
           size="sm"
           onClick={() => {
-            setEditing(toDraft());
+            setEditing(toChannelDraft());
             setFormError(null);
           }}
         >
@@ -159,6 +158,8 @@ export function RelayChannelSection() {
       </div>
       {error ? <p className="text-ui-sm text-destructive">{error}</p> : null}
       {formError ? <p className="text-ui-sm text-destructive">{formError}</p> : null}
+      {testResult ? <p className="text-ui-sm text-foreground-subtle">{testResult}</p> : null}
+      <RelayQuickCreate channels={channels} saving={saving} onCreate={handleQuickCreate} />
       {loading && channels.length === 0 ? (
         <p className="text-ui-sm text-foreground-subtle">加载中…</p>
       ) : null}
@@ -179,7 +180,7 @@ export function RelayChannelSection() {
                 size="xs"
                 variant="ghost"
                 onClick={() => {
-                  setEditing(toDraft(channel));
+                  setEditing(toChannelDraft(channel));
                   setFormError(null);
                 }}
               >
@@ -212,16 +213,29 @@ export function RelayChannelSection() {
               <div key={group.groupId} className="flex items-center justify-between text-ui-sm">
                 <span>
                   {group.groupName} · {group.groupRatio === 0 ? "免费" : `×${group.groupRatio}`} ·{" "}
-                  {group.models.length} 个模型
+                  {group.models.length} 个模型 · {group.responseProtocol ?? "openai"}/
+                  {group.keyMode ?? "single"}
+                  {group.status !== "enabled" ? " · 已禁用" : ""}
+                  {channel.defaultGroupId === group.groupId ? " · 默认" : ""}
                 </span>
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  disabled={fetching === `${channel.providerId}:${group.groupId}`}
-                  onClick={() => void handleFetch(channel.providerId, group.groupId)}
-                >
-                  {fetching === `${channel.providerId}:${group.groupId}` ? "同步中…" : "同步模型"}
-                </Button>
+                <span className="flex gap-2">
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    disabled={fetching === `${channel.providerId}:${group.groupId}`}
+                    onClick={() => void handleFetch(channel.providerId, group.groupId)}
+                  >
+                    {fetching === `${channel.providerId}:${group.groupId}` ? "同步中…" : "同步模型"}
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    disabled={testing === `${channel.providerId}:${group.groupId}`}
+                    onClick={() => void handleTest(channel.providerId, group.groupId)}
+                  >
+                    {testing === `${channel.providerId}:${group.groupId}` ? "测试中…" : "测试连接"}
+                  </Button>
+                </span>
               </div>
             ))}
             {channel.groups.length === 0 ? (
@@ -231,167 +245,14 @@ export function RelayChannelSection() {
         </div>
       ))}
       {editing ? (
-        <div className="rounded-lg border border-border p-3">
-          <div className="grid grid-cols-2 gap-2">
-            <label className="flex flex-col gap-1 text-ui-sm">
-              名称
-              <input
-                className="rounded-md border border-input bg-input px-2 py-1 text-ui-sm"
-                value={editing.providerName}
-                onChange={(event) => setEditing({ ...editing, providerName: event.target.value })}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-ui-sm">
-              Base URL
-              <input
-                className="rounded-md border border-input bg-input px-2 py-1 text-ui-sm"
-                value={editing.baseUrl}
-                placeholder="https://relay.example/v1"
-                onChange={(event) => setEditing({ ...editing, baseUrl: event.target.value })}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-ui-sm">
-              状态
-              <select
-                className="rounded-md border border-input bg-input px-2 py-1 text-ui-sm"
-                value={editing.status}
-                onChange={(event) =>
-                  setEditing({ ...editing, status: event.target.value as "enabled" | "disabled" })
-                }
-              >
-                <option value="enabled">启用</option>
-                <option value="disabled">禁用</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-ui-sm">
-              密钥（留空保留旧密钥）
-              <input
-                type="password"
-                className="rounded-md border border-input bg-input px-2 py-1 text-ui-sm"
-                value={editing.apiKeysText}
-                onChange={(event) => setEditing({ ...editing, apiKeysText: event.target.value })}
-              />
-            </label>
-          </div>
-          <div className="mt-2 flex flex-col gap-2">
-            {editing.groups.map((group, index) => (
-              <div key={index} className="grid grid-cols-3 gap-2 rounded-md bg-surface p-2">
-                <input
-                  className="rounded-md border border-input bg-input px-2 py-1 text-ui-sm"
-                  placeholder="分组 id"
-                  value={group.id}
-                  onChange={(event) => {
-                    const groups = editing.groups.map((item, i) =>
-                      i === index ? { ...item, id: event.target.value } : item,
-                    );
-                    setEditing({ ...editing, groups });
-                  }}
-                />
-                <input
-                  className="rounded-md border border-input bg-input px-2 py-1 text-ui-sm"
-                  placeholder="分组名"
-                  value={group.name}
-                  onChange={(event) => {
-                    const groups = editing.groups.map((item, i) =>
-                      i === index ? { ...item, name: event.target.value } : item,
-                    );
-                    setEditing({ ...editing, groups });
-                  }}
-                />
-                <input
-                  className="rounded-md border border-input bg-input px-2 py-1 text-ui-sm"
-                  placeholder="倍率（默认 1）"
-                  value={group.groupRatio}
-                  onChange={(event) => {
-                    const groups = editing.groups.map((item, i) =>
-                      i === index ? { ...item, groupRatio: event.target.value } : item,
-                    );
-                    setEditing({ ...editing, groups });
-                  }}
-                />
-                <select
-                  className="rounded-md border border-input bg-input px-2 py-1 text-ui-sm"
-                  value={group.keyMode}
-                  onChange={(event) => {
-                    const groups = editing.groups.map((item, i) =>
-                      i === index
-                        ? { ...item, keyMode: event.target.value as GroupDraft["keyMode"] }
-                        : item,
-                    );
-                    setEditing({ ...editing, groups });
-                  }}
-                >
-                  <option value="single">单密钥</option>
-                  <option value="random">随机</option>
-                  <option value="polling">轮询</option>
-                </select>
-                <select
-                  className="rounded-md border border-input bg-input px-2 py-1 text-ui-sm"
-                  value={group.responseProtocol}
-                  onChange={(event) => {
-                    const groups = editing.groups.map((item, i) =>
-                      i === index
-                        ? {
-                            ...item,
-                            responseProtocol: event.target.value as GroupDraft["responseProtocol"],
-                          }
-                        : item,
-                    );
-                    setEditing({ ...editing, groups });
-                  }}
-                >
-                  <option value="openai">OpenAI</option>
-                  <option value="openai-response">OpenAI Responses</option>
-                  <option value="anthropic">Anthropic</option>
-                  <option value="gemini">Gemini</option>
-                </select>
-                <textarea
-                  className="col-span-3 rounded-md border border-input bg-input px-2 py-1 text-ui-sm"
-                  rows={2}
-                  placeholder="模型列表，每行一个"
-                  value={group.modelsText}
-                  onChange={(event) => {
-                    const groups = editing.groups.map((item, i) =>
-                      i === index ? { ...item, modelsText: event.target.value } : item,
-                    );
-                    setEditing({ ...editing, groups });
-                  }}
-                />
-              </div>
-            ))}
-            <Button
-              size="xs"
-              variant="ghost"
-              onClick={() =>
-                setEditing({
-                  ...editing,
-                  groups: [
-                    ...editing.groups,
-                    {
-                      id: "",
-                      name: "",
-                      baseUrl: "",
-                      groupRatio: "1",
-                      keyMode: "single",
-                      responseProtocol: "openai",
-                      modelsText: "",
-                    },
-                  ],
-                })
-              }
-            >
-              添加分组
-            </Button>
-          </div>
-          <div className="mt-3 flex gap-2">
-            <Button size="sm" disabled={saving} onClick={() => void handleSave()}>
-              {saving ? "保存中…" : "保存"}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
-              取消
-            </Button>
-          </div>
-        </div>
+        <RelayChannelEditor
+          draft={editing}
+          channels={channels}
+          saving={saving}
+          onChange={setEditing}
+          onSave={handleSave}
+          onCancel={() => setEditing(null)}
+        />
       ) : null}
     </div>
   );
