@@ -21,6 +21,7 @@ import { getCodePreviewTheme } from "@/lib/codePreviewPreferences.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import type { CodePreviewSettings } from "@/store/index.js";
 import { THEME_MODES } from "@/settings/settingsPageConfig.js";
+import { CustomThemeSection } from "@/settings/CustomThemeSection.js";
 import { MAX_UI_FONT_SIZE_PX, MIN_UI_FONT_SIZE_PX } from "@/lib/uiFontSize.js";
 
 function FontSizeInput({
@@ -154,6 +155,7 @@ export function AppearanceSectionContent({
             />
           </CardContent>
         </Card>
+        <CustomThemeSection theme={theme} setTheme={setTheme} />
       </div>
 
       <div className="space-y-6">

@@ -19,6 +19,7 @@ import {
   type providerTemplateNameMapDataSchema,
   type providerTemplateDataSchema,
 } from "./provider-data-schema.js";
+import type { RelayChannel } from "./relay-channel-schema.js";
 import { validateConfigSchema } from "./schema-validation.js";
 import type { ModelId, ProviderId, ProviderTemplateId } from "./ids.js";
 import type { ProviderConfigRuleData } from "./rule-data-schema.js";
@@ -175,6 +176,7 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
   readonly logo?: ProviderConfigObject["logo"];
   readonly access?: ProviderAccessConfig | null;
   readonly api?: ProviderApiConfig | null;
+  readonly channel?: RelayChannel | null;
   readonly builtinModelIds?: ProviderConfigObject["builtinModelIds"];
   readonly personalModelIds?: ProviderConfigObject["personalModelIds"];
   readonly modelOrder?: ProviderConfigObject["modelOrder"];
@@ -186,6 +188,7 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
     this.logo = freezeProviderLogo(input.logo);
     this.access = input.access;
     this.api = input.api;
+    this.channel = freezeRelayChannel(input.channel);
     this.builtinModelIds = freezeModelIds(input.builtinModelIds);
     this.personalModelIds = freezeModelIds(input.personalModelIds);
     this.modelOrder = freezeModelIds(input.modelOrder);
@@ -199,6 +202,7 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
       logo: this.overlayValue(this.logo, next.logo),
       access: overlayProviderAccess(this.access, next.access),
       api: this.overlayConfig(this.api, next.api),
+      channel: this.overlayValue(this.channel, next.channel),
       builtinModelIds: this.overlayValue(this.builtinModelIds, next.builtinModelIds),
       personalModelIds: this.overlayValue(this.personalModelIds, next.personalModelIds),
       modelOrder: this.overlayValue(this.modelOrder, next.modelOrder),
@@ -223,6 +227,7 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
       logo: this.logo,
       access: this.access,
       api: this.api,
+      channel: this.channel,
       builtinModelIds: this.builtinModelIds,
       personalModelIds: this.personalModelIds,
       modelOrder: this.modelOrder,
@@ -237,6 +242,7 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
       logo: this.logo,
       access: this.access,
       api: this.api,
+      channel: this.channel,
       builtinModelIds: source?.builtinModelIds,
       personalModelIds: source?.personalModelIds,
       modelOrder: source?.modelOrder,
@@ -255,6 +261,7 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
       logo: this.logo,
       access: this.access?.toJSON() ?? this.access,
       api: this.api?.toJSON() ?? this.api,
+      channel: this.channel ?? undefined,
       builtinModelIds: this.builtinModelIds,
       personalModelIds: this.personalModelIds,
       modelOrder: this.modelOrder,
@@ -360,6 +367,19 @@ function freezeProviderLogo(
   logo: ProviderLogoRef | null | undefined,
 ): ProviderLogoRef | null | undefined {
   return logo ? Object.freeze({ ...logo }) : logo;
+}
+
+function freezeRelayChannel(
+  channel: RelayChannel | null | undefined,
+): RelayChannel | null | undefined {
+  // 必须保留 undefined：overlay 以 undefined 表示"未指定、沿用基座"，
+  // 若把缺席转成 null 会被误当显式清空，personal overlay 全链丢 channel。
+  if (channel === undefined) return undefined;
+  if (channel === null) return null;
+  return Object.freeze({
+    ...channel,
+    groups: channel.groups ? Object.freeze([...channel.groups]) : channel.groups,
+  });
 }
 
 function freezeModelIds(

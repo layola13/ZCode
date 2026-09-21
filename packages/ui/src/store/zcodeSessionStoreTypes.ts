@@ -26,6 +26,7 @@ import {
   type SessionCreateSource,
 } from "@zcode/shared";
 import type { ZCodeUiError } from "@/lib/zcodeUiError.js";
+import type { RelayChannelSelection } from "@zcode/services";
 import type {
   AutomationsNavigationTab,
   TaskNavigationHistory,
@@ -36,6 +37,15 @@ import type { MentionCategory, MentionItemData } from "@/mentions/mentionTypes.j
 // ────────────────────────────────────────────
 // Interfaces
 // ────────────────────────────────────────────
+
+/** 省钱压缩偏好（spec p2 §2）：per-task，UI 局部态，不作服务端事实。 */
+export interface FreeCompactPreference {
+  readonly enabled: boolean;
+  /** 触发阈值（used/max 百分比），50-95，默认 80。 */
+  readonly threshold: number;
+  /** 上次触发时间戳（ms），60s 冷却。 */
+  readonly lastRunAt?: number;
+}
 
 export interface WorkspaceInitState {
   status: ZCodeWorkspaceInitStatus;
@@ -181,6 +191,10 @@ export interface WorkspaceZCodeUIState {
   taskRuntimeByTaskId: Record<string, TaskRuntimeState>;
   /** 每个 task 自己的临时 UI 态，避免切换任务后丢失计划面板和权限弹窗 */
   taskUiByTaskId: Record<string, TaskUiState>;
+  /** 每个 task 独立的中转渠道选择（provider/group/model）；切任务恢复各自选择 */
+  taskRelaySelectionByTaskId: Record<string, RelayChannelSelection>;
+  /** 每个 task 独立的省钱压缩偏好；切任务恢复各自偏好 */
+  taskFreeCompactByTaskId: Record<string, FreeCompactPreference>;
   taskConfigOptionsByTaskId: Record<string, ZCodeConfigOption[]>;
   taskConfigOptionsStatusByTaskId: Record<string, ConfigOptionsStatus>;
   /** task 未读状态的兼容缓存；真实未读状态以 task meta.unreadAt 为准 */
@@ -221,6 +235,18 @@ export interface ZCodeSessionStoreState {
   getWorkspaceState: (workspacePath: string, workspaceIdentity?: string) => WorkspaceZCodeUIState;
 
   setActiveTaskId: (workspacePath: string, id: string | null, workspaceIdentity?: string) => void;
+  setTaskRelaySelection: (
+    workspacePath: string,
+    taskId: string,
+    selection: RelayChannelSelection | null,
+    workspaceIdentity?: string,
+  ) => void;
+  setTaskFreeCompact: (
+    workspacePath: string,
+    taskId: string,
+    preference: FreeCompactPreference | null,
+    workspaceIdentity?: string,
+  ) => void;
   promoteGroupedDraftTask: (
     workspacePath: string,
     taskId: string,
@@ -529,6 +555,8 @@ export function createDefaultWorkspaceState(
     modelSwitchStage: "idle",
     taskRuntimeByTaskId: {},
     taskUiByTaskId: {},
+    taskRelaySelectionByTaskId: {},
+    taskFreeCompactByTaskId: {},
     taskConfigOptionsByTaskId: {},
     taskConfigOptionsStatusByTaskId: {},
     taskUnreadByTaskId: {},

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { sparseShape } from "@zcode/shared/config-schema";
+import { relayChannelSchema } from "./relay-channel-schema.js";
 
 export const providerApiTypeDataSchema = z.enum([
   "anthropic-messages",
@@ -86,6 +87,9 @@ export const providerConfigDataSchema = z
     logo: providerLogoDataSchema.nullable().optional(),
     access: providerAccessDataSchema.nullable().optional(),
     api: providerApiDataSchema.nullable().optional(),
+    // 中转渠道扩展：仅 personal provider 使用（group 仍须 standard-personal）；
+    // 无 channel 的普通 provider 行为不变。
+    channel: relayChannelSchema.nullable().optional(),
     builtinModelIds: modelIdsDataSchema,
     personalModelIds: modelIdsDataSchema,
     modelOrder: modelIdsDataSchema,

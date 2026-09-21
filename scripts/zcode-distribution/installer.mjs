@@ -29,17 +29,22 @@ cleanup() {
 }
 trap cleanup EXIT
 
-ARCHIVE="$TMP_DIR/$TARBALL"
-curl -fL "\${BASE_URL%/}/releases/$VERSION/$TARBALL" -o "$ARCHIVE"
-
 mkdir -p "$INSTALL_DIR/releases" "$BIN_DIR"
 TARGET="$INSTALL_DIR/releases/$VERSION"
-rm -rf "$TARGET.new"
-mkdir -p "$TARGET.new"
-tar -xzf "$ARCHIVE" -C "$TARGET.new"
-rm -rf "$TARGET"
-mv "$TARGET.new/${packageDirName}" "$TARGET"
-rm -rf "$TARGET.new"
+# 版本化缓存命中直接复用（cxu ~/.cxu/server/v<ver> 同理）；ZCODE_DIST_FORCE=1 强制重装。
+if [ -f "$TARGET/server-bundle/index.js" ] && [ "\${ZCODE_DIST_FORCE:-0}" != "1" ]; then
+  echo "ZCode $VERSION already installed (cached). Set ZCODE_DIST_FORCE=1 to reinstall."
+else
+  ARCHIVE="$TMP_DIR/$TARBALL"
+  curl -fL "\${BASE_URL%/}/releases/$VERSION/$TARBALL" -o "$ARCHIVE"
+
+  rm -rf "$TARGET.new"
+  mkdir -p "$TARGET.new"
+  tar -xzf "$ARCHIVE" -C "$TARGET.new"
+  rm -rf "$TARGET"
+  mv "$TARGET.new/${packageDirName}" "$TARGET"
+  rm -rf "$TARGET.new"
+fi
 ln -sfn "$TARGET" "$INSTALL_DIR/current"
 
 cat > "$BIN_DIR/zcode" <<SH

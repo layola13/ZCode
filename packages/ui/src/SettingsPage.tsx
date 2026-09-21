@@ -55,6 +55,7 @@ import {
 } from "@/lib/accountProviderAccess.js";
 import { buildUsageEntitlementCacheKey } from "@/lib/usageEntitlementCache.js";
 import { ModelProviderSection } from "@/settings/ModelProviderSection.js";
+import { RelayChannelSection } from "@/settings/RelayChannelSection.js";
 import { useCodingPlanUpgradeDialog } from "@/settings/CodingPlanUpgradeDialogProvider.js";
 import { useEnterpriseCodingPlanProducts } from "@/settings/model-provider-section/useEnterpriseCodingPlanProducts.js";
 import { UsageStatsSection, type UsageStatsSectionTab } from "@/settings/UsageStatsSection.js";
@@ -1820,6 +1821,11 @@ export function SettingsPage({
                                 setPendingModelProviderTarget(undefined)
                               }
                             />
+                          </ServiceProvider>
+                        ) : activeSection === "relayChannels" ? (
+                          <ServiceProvider services={localHostServices}>
+                            {/* 中转渠道属于本机全局事实源；与模型配置同理不注入远端 Host。 */}
+                            <RelayChannelSection />
                           </ServiceProvider>
                         ) : activeSection === "memory" ? (
                           <ServiceProvider services={localHostServices}>

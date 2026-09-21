@@ -26,6 +26,7 @@ import {
   resolveModeOptionIcon,
 } from "@/chat-input-toolbar/display.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { useConfirmDialogStore } from "@/store/confirmDialogStore.js";
 import { isCoarseTouchDevice } from "@/lib/pickerFocus.js";
 import { useShortcutCommandLabel } from "@/shortcuts/useShortcutBindings.js";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
@@ -37,14 +38,24 @@ import type { V4ComposerToolbarProps } from "@/v4/composer/V4ComposerToolbar.js"
 
 function noop(): void {}
 
+/** Danger 确认记忆 key：草稿态与会话态隔离。 */
+function dangerTaskKey(sessionId: string | null): string {
+  return sessionId ?? "__draft__";
+}
+
+/** renderer-local 确认记忆：仅本渲染进程有效，切换 task 重新确认。 */
+const dangerConfirmedTaskKeys = new Set<string>();
+
 /** Plan 是独立勾选项，三种权限仍为单选；只编辑草稿，不向 Runtime 发切换命令。 */
 function V4ComposerModeSwitchImpl({
+  workspacePath,
   provider,
   draftConfig,
   disabled,
   activeConfigPicker,
   onConfigPickerOpenChange,
   onSwitchMode,
+  sessionId,
 }: Pick<
   V4ComposerToolbarProps,
   | "workspacePath"
@@ -55,6 +66,7 @@ function V4ComposerModeSwitchImpl({
   | "activeConfigPicker"
   | "onConfigPickerOpenChange"
   | "onSwitchMode"
+  | "sessionId"
 >) {
   const { intl } = useZCodeIntl();
   const displayProvider = provider ?? ZCODE_AGENT_PROVIDER;
@@ -85,6 +97,31 @@ function V4ComposerModeSwitchImpl({
     const next = getNextConfigSelectValue(modeOption);
     if (next) onSwitchMode(next);
   }, [modeOption, onSwitchMode]);
+  // Danger 确认：yolo 选择门，renderer-local 按 task 记忆（spec p2 §1）。
+  // 取消/关闭不切换模式，不写任何状态。
+  const handleModeChange = useCallback(
+    (value: string) => {
+      if (value !== "yolo" || dangerConfirmedTaskKeys.has(dangerTaskKey(sessionId))) {
+        onSwitchMode(value);
+        return;
+      }
+      void useConfirmDialogStore
+        .getState()
+        .requestConfirmation({
+          title: "切换到完全访问（Full access）？",
+          description: `此模式下 Agent 可在 ${workspacePath} 自动改写文件、执行命令，几乎不再逐次确认。确认仅对当前会话有效。`,
+          confirmLabel: "确认切换",
+          cancelLabel: "取消",
+          confirmVariant: "destructive",
+        })
+        .then((confirmed) => {
+          if (!confirmed) return;
+          dangerConfirmedTaskKeys.add(dangerTaskKey(sessionId));
+          onSwitchMode("yolo");
+        });
+    },
+    [onSwitchMode, sessionId, workspacePath],
+  );
   useToolbarShortcutBindings({
     hasAnyOption: Boolean(selected),
     toolbarDisabled: disabled,
@@ -157,7 +194,7 @@ function V4ComposerModeSwitchImpl({
             </span>
           </DropdownMenuCheckboxItem>
           <DropdownMenuSeparator />
-          <DropdownMenuRadioGroup value={selected.id} onValueChange={onSwitchMode}>
+          <DropdownMenuRadioGroup value={selected.id} onValueChange={handleModeChange}>
             {permissions.map((mode) => {
               const ModeIcon = resolveModeOptionIcon(mode.id);
               const descriptionId = getModeOptionDescriptionMessageId(displayProvider, {

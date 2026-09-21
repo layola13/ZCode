@@ -103,6 +103,7 @@ import { useDraftModelReadinessGate } from "@/v4/composer/useDraftModelReadiness
 import { useSettings } from "@/hooks/useSettingService.js";
 import { useZCodeStoreWithDefault } from "@/store/StoreProvider.js";
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
+import { maybeRunFreeAutoCompact } from "@/lib/freeAutoCompact.js";
 import {
   DEFAULT_CONVERSATION_SHARE_ACCESS_MODE,
   DEFAULT_CONVERSATION_SHARE_DOCK_STATE,
@@ -2069,6 +2070,21 @@ export function SessionPane({
   // 按门禁注入"选中即打开辅助对话"的本地命令；草稿态（无父 session 可挂 child）、
   // 辅助对话自身、只读与手机 viewport 均不提供。
   const appSlashCommands = useMemo<AppSlashCommand[] | undefined>(() => {
+    const openRelaySettings = () => {
+      setPendingSettingsSectionIntent("relayChannels");
+      openSettingsTab?.();
+    };
+    const relayDescription = intl.formatMessage({ id: "chat.slash.app.relay.description" });
+    const relayCommands: AppSlashCommand[] = cliSlashCommandNames.has("relay")
+      ? []
+      : [
+          {
+            value: "relay",
+            description: relayDescription,
+            keywords: ["relay", "channel", "中转", "渠道", "中转渠道"],
+            run: openRelaySettings,
+          },
+        ];
     if (
       !sessionId ||
       !onOpenSelectionSideChat ||
@@ -2079,7 +2095,8 @@ export function SessionPane({
         isMobileViewport: false,
       })
     ) {
-      return undefined;
+      // /relay 是设置入口，不依赖 side-chat 条件。
+      return relayCommands.length > 0 ? relayCommands : undefined;
     }
     const openNewSelectionSideChat = () => {
       void handleOpenSelectionSideConversation(undefined, true);
@@ -2088,15 +2105,18 @@ export function SessionPane({
     // `/btw` 是 `/side` 的等价别名，适配不同用户输入习惯，面板中各自独立展示。
     const sharedKeywords = ["side", "btw", "side chat", "auxiliary", "辅助对话", "辅助", "侧边"];
     const description = intl.formatMessage({ id: "chat.slash.app.side.description" });
-    return [
+    const sideCommands = [
       { value: "side", description, keywords: sharedKeywords, run: openNewSelectionSideChat },
       { value: "btw", description, keywords: sharedKeywords, run: openNewSelectionSideChat },
     ].filter((command) => !cliSlashCommandNames.has(command.value));
+    // /relay 是设置入口，不依赖 side-chat 条件；CLI catalog 有同名时同样让路。
+    return [...sideCommands, ...relayCommands];
   }, [
     cliSlashCommandNames,
     handleOpenSelectionSideConversation,
     intl,
     onOpenSelectionSideChat,
+    openSettingsTab,
     readOnly,
     selectionSideChat,
     sessionId,
@@ -2964,6 +2984,48 @@ export function SessionPane({
       text: string,
       options?: ConversationComposerSendOptions,
     ): Promise<ConversationComposerSendResult> => {
+      // 省钱压缩 barrier（spec p2 §2）：触发后跑 /compact，本次不发送、草稿保留。
+      // scope 与 composer 附件/chips 一致：attachmentSessionId ?? sessionId。
+      const freeCompactScopeId = effectiveSessionId;
+      if (freeCompactScopeId) {
+        const storeState = useZCodeSessionStore.getState();
+        const workspaceState = storeState.getWorkspaceState(workspacePath, workspaceIdentity);
+        const preference = workspaceState.taskFreeCompactByTaskId[freeCompactScopeId] ?? null;
+        const usageWindow = snapshotRef.current?.usage?.contextWindow;
+        const usagePercent =
+          usageWindow && usageWindow.maxTokens > 0
+            ? (usageWindow.usedTokens / usageWindow.maxTokens) * 100
+            : null;
+        const barrier = await maybeRunFreeAutoCompact(
+          {
+            taskId: freeCompactScopeId,
+            usagePercent,
+            phase: snapshotRef.current?.control.phase ?? null,
+            preference,
+          },
+          async () => {
+            const parsed = parseV4VisibleSlashCommand("/compact");
+            if (!parsed) return;
+            await dispatchSlashCommand(
+              parsed,
+              freeCompactScopeId,
+              snapshotRef.current?.revision,
+              undefined,
+            );
+            storeState.setTaskFreeCompact(
+              workspacePath,
+              freeCompactScopeId,
+              {
+                enabled: preference?.enabled ?? true,
+                threshold: preference?.threshold ?? 80,
+                lastRunAt: Date.now(),
+              },
+              workspaceIdentity,
+            );
+          },
+        );
+        if (barrier === "compacted") return "blocked";
+      }
       // 发送前冻结本次 admission 预期：command ACK 回来时 projection 可能已经切到 running，
       // 不能用更新后的 enqueue mode 反推刚提交的 prompt 是否原本立即发送。
       const shouldFocusLatest = shouldFocusTimelineAfterComposerSend({
@@ -2999,7 +3061,16 @@ export function SessionPane({
         throw error;
       }
     },
-    [dispatchSendText, focusTimelineToLatest, intl, sessionId],
+    [
+      dispatchSendText,
+      dispatchSlashCommand,
+      focusTimelineToLatest,
+      intl,
+      sessionId,
+      effectiveSessionId,
+      workspacePath,
+      workspaceIdentity,
+    ],
   );
 
   const handleComposerDraftStateChange = useCallback(

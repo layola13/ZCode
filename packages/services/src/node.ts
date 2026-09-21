@@ -377,6 +377,8 @@ import {
   IModelSelectionService,
   IProviderSettingsService,
 } from "./model-provider/providerFacadeServices.js";
+import { IRelayChannelService } from "./relay/relayChannel.js";
+import { createRelayChannelService } from "./relay/relayChannelService.js";
 import { createProviderSettingsConnectivityTester } from "./model-provider/providerSettingsConnectivity.js";
 import {
   createProviderProvisioningSource,
@@ -2593,7 +2595,14 @@ export function createLocalServices(options: {
   providerProvisioningTriggerDisposers.set(services, providerProvisioningDisposers);
   services
     .register(IProviderSettingsService, providerRuntime.providerSettings)
-    .register(IModelSelectionService, providerRuntime.modelSelection);
+    .register(IModelSelectionService, providerRuntime.modelSelection)
+    .register(
+      IRelayChannelService,
+      createRelayChannelService({
+        configService: providerRuntime.configService,
+        credentialService,
+      }),
+    );
   if (isDesktopAttachedRemote || options.providerProvisioningTargetEnabled === true) {
     services.register(
       IProviderProvisioningTargetService,

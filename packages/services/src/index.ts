@@ -78,6 +78,24 @@ export { ICredentialService } from "./credential/credential.js";
 // Broadcast service — IBroadcastService is both a type (interface) and value (descriptor)
 export { IBroadcastService } from "./broadcast/broadcast.js";
 
+// Relay channel service — 只导出 descriptor 与类型；工厂含 Node 链（fs/锁），
+// 由 host 侧 node.ts 与测试从实现文件直接导入（与 onboarding 同惯例）。
+export { IRelayChannelService } from "./relay/relayChannel.js";
+export {
+  fetchRelayChannelModelsInputSchema,
+  relayChannelSelectionSchema,
+  resolveRelayTargetInputSchema,
+  saveRelayChannelInputSchema,
+} from "./relay/relayChannel.js";
+export type {
+  FetchRelayChannelModelsInput,
+  RelayChannelSelection,
+  RelayChannelView,
+  ResolveRelayTargetInput,
+  ResolvedRelayTarget,
+  SaveRelayChannelInput,
+} from "./relay/relayChannel.js";
+
 // Onboarding 完成记录服务（本地持久化，后续上传服务器）
 export { IOnboardingRecordService } from "./onboarding/onboardingRecord.js";
 export type {

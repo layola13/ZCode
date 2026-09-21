@@ -18,6 +18,7 @@ import {
   IOAuthService,
   IModelSelectionService,
   IProviderSettingsService,
+  IRelayChannelService,
   IUsageStatsService,
   ICodingPlanSubscriptionService,
   IClientConfigService,
@@ -334,6 +335,8 @@ export function createRemoteWorkspaceServiceCollection(params: {
     // 必须直接读取远端 Registry，不能继续显示 Desktop 本地 Provider。
     .register(IModelSelectionService, params.connectionServices.modelSelectionService)
     .register(IProviderSettingsService, params.connectionServices.providerSettingsService)
+    // 中转渠道事实属于目标 Environment，与 Provider/Model 同理打到远端。
+    .register(IRelayChannelService, params.connectionServices.relayChannelService!)
     .register(
       IUsageStatsService,
       createUsageStatsService({

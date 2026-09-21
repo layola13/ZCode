@@ -29,6 +29,7 @@ export const THEME_MODES: Array<{
   { mode: "system", icon: Monitor },
   { mode: "zai-dark", icon: Moon },
   { mode: "zai-light", icon: Sun },
+  { mode: "custom", icon: Palette },
 ];
 
 type SettingsSectionGroupId = "basics" | "agentCapabilities" | "dataAndStats";
@@ -71,6 +72,12 @@ const BASE_SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     id: "modelProvider",
     icon: Package,
     titleId: "settings.modelProviderTitle",
+    groupId: "basics",
+  },
+  {
+    id: "relayChannels",
+    icon: Cable,
+    titleId: "settings.relayChannelsTitle",
     groupId: "basics",
   },
   {

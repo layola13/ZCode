@@ -65,6 +65,7 @@ export function serializeRegistryProviderConfig(
     ...(config.builtinModelIds == null ? {} : { builtinModelIds: [...config.builtinModelIds] }),
     ...(config.personalModelIds == null ? {} : { personalModelIds: [...config.personalModelIds] }),
     ...(config.modelOrder == null ? {} : { modelOrder: [...config.modelOrder] }),
+    ...(config.channel == null ? {} : { channel: config.channel }),
     ...(config.visibility === undefined ? {} : { visibility: config.visibility }),
   };
 }

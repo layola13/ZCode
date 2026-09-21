@@ -18,6 +18,7 @@ import type {
   IModelSelectionService,
   IProviderSettingsService,
 } from "./model-provider/providerFacadeServices.js";
+import type { IRelayChannelService } from "./relay/relayChannel.js";
 import type { IUsageStatsService } from "./usage-stats/usageStats.js";
 import type { ICodingPlanSubscriptionService } from "./coding-plan-subscription/codingPlanSubscription.js";
 import type { IClientConfigService } from "./client-config/clientConfig.js";
@@ -64,6 +65,8 @@ export interface IServiceAccessor {
   readonly oauthService: IOAuthService;
   /** 当前 Environment 的 Provider 配置与设置视图。 */
   readonly providerSettingsService: IProviderSettingsService;
+  /** 中转渠道管理；旧 server wire 或测试 double 可暂不提供。 */
+  readonly relayChannelService?: IRelayChannelService;
   /** 当前 Environment Registry 发布的唯一模型选择 View。 */
   readonly modelSelectionService: IModelSelectionService;
   readonly usageStatsService: IUsageStatsService;

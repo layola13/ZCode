@@ -12,12 +12,14 @@ import {
   type ZCodeWorkspaceInitStatus,
 } from "@zcode/shared";
 import { areConfigOptionsEquivalent } from "@/lib/configOptionsEquality.js";
+import type { RelayChannelSelection } from "@zcode/services";
 import type { ZCodeUiError } from "@/lib/zcodeUiError.js";
 import { pushNavEntry } from "@/lib/taskNavigationHistory.js";
 import { resolveTaskRestorePreloadConfigOptions } from "@/lib/taskModelRecovery.js";
 import type {
   ZCodeSessionStoreState,
   ConfigOptionsStatus,
+  FreeCompactPreference,
   ComposerMentionPrefill,
   GroupedDraftTaskState,
   GroupedDraftTaskPlacement,
@@ -300,6 +302,46 @@ export function createWorkspaceSlice(set: SetFn) {
       });
     },
 
+    setTaskRelaySelection: (
+      workspacePath: string,
+      taskId: string,
+      selection: RelayChannelSelection | null,
+      workspaceIdentity?: string,
+    ) => {
+      set((state) =>
+        updateWorkspaceState(
+          state,
+          workspacePath,
+          (current) => {
+            const next = { ...current.taskRelaySelectionByTaskId };
+            if (selection == null) delete next[taskId];
+            else next[taskId] = selection;
+            return { ...current, taskRelaySelectionByTaskId: next };
+          },
+          workspaceIdentity,
+        ),
+      );
+    },
+    setTaskFreeCompact: (
+      workspacePath: string,
+      taskId: string,
+      preference: FreeCompactPreference | null,
+      workspaceIdentity?: string,
+    ) => {
+      set((state) =>
+        updateWorkspaceState(
+          state,
+          workspacePath,
+          (current) => {
+            const next = { ...current.taskFreeCompactByTaskId };
+            if (preference == null) delete next[taskId];
+            else next[taskId] = preference;
+            return { ...current, taskFreeCompactByTaskId: next };
+          },
+          workspaceIdentity,
+        ),
+      );
+    },
     promoteGroupedDraftTask: (
       workspacePath: string,
       taskId: string,

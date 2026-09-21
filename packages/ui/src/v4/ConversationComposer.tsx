@@ -48,6 +48,7 @@ import type {
   AttachmentRef,
   ConversationSnapshot,
   SessionConfigState,
+  SessionUsageState,
 } from "@zcode/shared/zcode-protocol-v4";
 import {
   ArrowUpIcon,
@@ -152,6 +153,8 @@ import type { CodeViewerSource } from "@/lib/codeViewer.js";
 import { useConversationSelectionReferences } from "@/v4/composer/useConversationSelectionReferences.js";
 import { ConversationBackgroundWorkTrigger } from "@/v4/composer/ConversationBackgroundWorkTrigger.js";
 import { V4ComposerCuaEntry } from "@/v4/composer/V4ComposerCuaEntry.js";
+import { RelayChannelControls } from "@/v4/composer/RelayChannelControls.js";
+import { FreeCompactControl } from "@/v4/composer/FreeCompactControl.js";
 import {
   V4ComposerModeSwitch,
   V4ComposerModelControls,
@@ -474,6 +477,13 @@ interface ConversationComposerProps {
   appSlashCommands?: readonly AppSlashCommand[];
   /** 把 composer 的 drop 路由暴露给整个对话 pane / 桌面草稿标题栏。 */
   onDropTargetControllerChange?: (controller: ConversationDropTargetController | null) => void;
+}
+
+/** 上下文使用百分比（0-100）；无数据返回 null，barrier 不触发。 */
+function resolveComposerUsagePercent(usage: SessionUsageState | null): number | null {
+  const window = usage?.contextWindow;
+  if (!window || window.maxTokens <= 0) return null;
+  return (window.usedTokens / window.maxTokens) * 100;
 }
 
 function formatAttachmentLineCount(attachment: ChatComposerAttachment, locale: string): string {
@@ -2060,6 +2070,20 @@ function ConversationComposerImpl({
             onRecoverCustomModelSelection={onRecoverCustomModelSelection}
             onSendCompressionCommand={onSendCompressionCommand}
           />
+          <RelayChannelControls
+            workspacePath={workspacePath}
+            workspaceIdentity={workspaceIdentity}
+            taskId={attachmentSessionId ?? sessionId ?? null}
+            disabled={disabled}
+          />
+          <FreeCompactControl
+            workspacePath={workspacePath}
+            workspaceIdentity={workspaceIdentity}
+            taskId={attachmentSessionId ?? sessionId ?? null}
+            usagePercent={resolveComposerUsagePercent(composerUsage)}
+            disabled={disabled}
+            onCompactNow={() => onSendCompressionCommand?.("/compact")}
+          />
         </span>
         {showStopControl ? (
           <ControlHintTooltip title={stopTooltipTitle} shortcut="Esc">
@@ -2148,6 +2172,7 @@ function ConversationComposerImpl({
           activeConfigPicker={activeConfigPicker}
           onConfigPickerOpenChange={handleConfigPickerOpenChange}
           onSwitchMode={onSwitchMode}
+          sessionId={attachmentSessionId ?? sessionId ?? null}
         />
         {/* 附件画廊重构曾整段覆盖 leadingActions，误删 CUA 常驻入口。
             入口自身继续负责平台、远程与设置可见性，不在 composer 重复判定。 */}

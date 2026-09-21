@@ -152,17 +152,21 @@ async function buildOutputs(skipBuild) {
   });
   run("pnpm", ["--filter", "@zcode/server", "build"]);
   run("pnpm", ["--filter", "@zcode/web", "build"]);
+  // launcher 单文件 server-bundle（cxu 式分发三件套之一）。
+  run("node", ["scripts/build-server-bundle.mjs"]);
 }
 
 async function stageZCodePackage({ packageRoot, version }) {
   const webDist = resolve(root, "packages", "web", "dist");
   const serverDist = resolve(root, "packages", "server", "dist");
+  const serverBundle = resolve(root, "dist", "server-bundle");
   const agentBundle = resolve(root, "apps", "zcode-cli", "packages", "cli", "dist", "zcode.cjs");
   const agentProvider = resolve(root, "apps/zcode-cli/packages/cli/dist/provider");
 
   await assertDirectory(webDist, "web dist");
   await assertDirectory(serverDist, "server dist");
   await assertFile(resolve(serverDist, "entry-http.js"), "server HTTP entry");
+  await assertFile(resolve(serverBundle, "index.js"), "server bundle entry");
   await assertFile(agentBundle, "agent app-server bundle");
   await assertFile(resolve(agentProvider, "zcode-builtin.json"), "Agent provider config");
 
@@ -178,6 +182,9 @@ async function stageZCodePackage({ packageRoot, version }) {
     recursive: true,
   });
   await cp(serverDist, resolve(packageRoot, "server"), {
+    recursive: true,
+  });
+  await cp(serverBundle, resolve(packageRoot, "server-bundle"), {
     recursive: true,
   });
   await mkdir(resolve(packageRoot, "agent"), {

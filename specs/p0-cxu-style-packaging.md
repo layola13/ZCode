@@ -26,7 +26,8 @@
 - P0.2 先落为根脚本 `scripts/zcode-serve.mjs`（未新建 workspace 包，理由：`@zcode/server-cli` 已有 server 进程管理，另起包会造成职责重叠；包化待 server-cli 职责切分后再议）。`--doctor-only` 与全链启动已验证；agent env 写法与 `scripts/zcode-distribution/runner.mjs` 对齐（COMMAND=node 本体）。
 - web 无构建指纹 meta，指纹校验用本地 vs served 的 `assets/index-*.js` 引用比对实现。
 - `package.json` 新增 `build:server-bundle` / `serve` 入口；`build:zcode` 未动（bundle 脚本自带卫生校验，避免碰发行路径）。
-- 待做：2.4 安装器版本化缓存、SEA 单文件（二期）。
+- 待做：SEA 单文件（二期）。
+- 实现记录（2026-09-21，P0 收尾）：`build-zcode.mjs` 组装 server-bundle（`buildOutputs` 构建 + `stageZCodePackage` 拷入 `server-bundle/`）；`installer.mjs` 生成脚本加版本化缓存命中（`releases/$VERSION/server-bundle/index.js` 存在且无 `ZCODE_DIST_FORCE=1` 即跳过下载解压）。
 
 不做（二期）：SEA 单文件可执行（复用现有 `build-sea.mjs/postject` 链，另起 spec）；桌面 Electron 集成；自更新通道。
 
