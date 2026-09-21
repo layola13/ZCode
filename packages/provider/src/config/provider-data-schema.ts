@@ -102,6 +102,16 @@ export const completeProviderConfigDataSchema = providerConfigDataSchema.extend(
   api: completeProviderApiDataSchema,
 });
 
+/**
+ * 免费中转渠道 completeness（P4）：access 仍须声明类型（api-key 壳），
+ * 但豁免 apiKey 非空；api.baseUrl 照常必填。group/成员规则与普通渠道一致。
+ */
+export const completeFreeChannelProviderConfigDataSchema = providerConfigDataSchema.extend({
+  group: providerGroupDataSchema,
+  access: providerAccessDataSchema,
+  api: completeProviderApiDataSchema,
+});
+
 export const providerTemplateNameMapDataSchema = z
   .object({
     "zh-CN": z.string().min(1).optional(),

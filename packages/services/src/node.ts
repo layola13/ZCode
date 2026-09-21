@@ -2593,16 +2593,23 @@ export function createLocalServices(options: {
   providerRuntimes.set(services, providerRuntime);
   providerProvisioningSources.set(services, providerProvisioningSource);
   providerProvisioningTriggerDisposers.set(services, providerProvisioningDisposers);
+  const relayChannelService = createRelayChannelService({
+    configService: providerRuntime.configService,
+    credentialService,
+  });
   services
     .register(IProviderSettingsService, providerRuntime.providerSettings)
     .register(IModelSelectionService, providerRuntime.modelSelection)
-    .register(
-      IRelayChannelService,
-      createRelayChannelService({
-        configService: providerRuntime.configService,
-        credentialService,
-      }),
-    );
+    .register(IRelayChannelService, relayChannelService);
+  // Kilo 免费渠道补种（P4）：装配是同步函数，这里后台进行，不阻断启动；
+  // 服务内部永不抛错，这里再兜底。登录门禁是响应式的，补种完成后 registry
+  // 刷新即重新评估（首启最多晚一拍，见 spec P4 §2）。
+  const relayChannelLogger = createServiceLogger("relayChannelService");
+  void relayChannelService.ensureKiloFreeChannel().catch((error: unknown) => {
+    relayChannelLogger.warn(undefined, "Kilo 免费渠道补种失败（已忽略）", {
+      error: error instanceof Error ? error.message : "unknown",
+    });
+  });
   if (isDesktopAttachedRemote || options.providerProvisioningTargetEnabled === true) {
     services.register(
       IProviderProvisioningTargetService,

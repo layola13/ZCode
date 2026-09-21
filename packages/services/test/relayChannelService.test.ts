@@ -4,8 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { ProviderConfig, ProviderConfigMap, type ProviderConfigRuntime } from "@zcode/provider";
+import { ApiKeyAccessConfig, ProviderApiConfig } from "@zcode/provider";
 import type { ICredentialService } from "../src/credential/credential.js";
 import { createRelayChannelService } from "../src/relay/relayChannelService.js";
+import { eligibleKiloFreeModels } from "../src/relay/relayChannelKilo.js";
 
 type ConfigService = ProviderConfigRuntime["configService"];
 
@@ -42,8 +44,31 @@ function createFakeConfigService() {
       providers = providers.delete(providerId);
       return { providers };
     },
+    async addPersonalModel(providerId: string, modelId: string) {
+      const rule = providers.getRule(providerId);
+      if (!rule) throw new Error(`Personal Provider 尚未创建: ${providerId}`);
+      const current = rule.config.personalModelIds ?? [];
+      if (current.includes(modelId)) throw new Error(`Model 已存在: ${providerId}/${modelId}`);
+      providers = providers.setRule({
+        ...rule,
+        config: rule.config.withPersonalModelIds([...current, modelId]),
+      });
+      return { providers };
+    },
+    async deletePersonalModel(providerId: string, modelId: string) {
+      const rule = providers.getRule(providerId);
+      if (!rule) throw new Error(`Personal Provider 尚未创建: ${providerId}`);
+      providers = providers.setRule({
+        ...rule,
+        config: rule.config.withPersonalModelIds(
+          (rule.config.personalModelIds ?? []).filter((id) => id !== modelId),
+        ),
+      });
+      return { providers };
+    },
+    __getProviders: () => providers,
   };
-  return service as unknown as ConfigService;
+  return service as unknown as ConfigService & { __getProviders: () => ProviderConfigMap };
 }
 
 function createFakeCredentialService() {
@@ -65,12 +90,13 @@ function createFakeCredentialService() {
 async function createService() {
   const dataDir = await mkdtemp(join(tmpdir(), "relay-test-"));
   const credentialService = createFakeCredentialService();
+  const configService = createFakeConfigService();
   const service = createRelayChannelService({
-    configService: createFakeConfigService(),
+    configService,
     credentialService,
     dataDir,
   });
-  return { service, credentialService, dataDir };
+  return { service, credentialService, configService, dataDir };
 }
 
 test("save+list 脱敏：无明文 key，只有 preview 与 configured", async () => {
@@ -187,4 +213,79 @@ test("thread selection：存取 + 渠道删除后读失效", async () => {
 test("临时目录隔离", async () => {
   const { dataDir } = await createService();
   await rm(dataDir, { recursive: true, force: true });
+});
+
+test("kilo 免费模型过滤：isFree 或 :free/-free 后缀", () => {
+  assert.deepEqual(
+    eligibleKiloFreeModels({
+      data: [
+        { id: "kilo-auto/efficient", isFree: false },
+        { id: "deepseek/deepseek-v3:free", isFree: false },
+        { id: "qwen/qwen3-free", isFree: false },
+        { id: "gpt-paid", isFree: false },
+        { id: "  spaced-model:free  ", isFree: false },
+        { id: "deepseek/deepseek-v3:free" },
+        { id: "" },
+      ],
+    }),
+    ["deepseek/deepseek-v3:free", "qwen/qwen3-free", "spaced-model:free"],
+  );
+  assert.deepEqual(eligibleKiloFreeModels({ data: [] }), []);
+  assert.deepEqual(eligibleKiloFreeModels(null), []);
+});
+
+test("免费渠道 completeness 豁免 access.apiKey，但 api.baseUrl 照常必填", () => {
+  const free = new ProviderConfig({
+    group: "standard-personal",
+    access: new ApiKeyAccessConfig(),
+    api: new ProviderApiConfig({
+      type: "openai-chat-completions",
+      baseUrl: "https://x.example/v1",
+    }),
+    channel: { free: true, groups: [] },
+    personalModelIds: ["m1"],
+    modelOrder: [],
+  });
+  assert.deepEqual(free.validateComplete(), []);
+  const noBase = new ProviderConfig({
+    group: "standard-personal",
+    access: new ApiKeyAccessConfig(),
+    api: new ProviderApiConfig({ type: "openai-chat-completions" }),
+    channel: { free: true, groups: [] },
+    personalModelIds: ["m1"],
+    modelOrder: [],
+  });
+  assert.ok(noBase.validateComplete().length > 0, "缺 baseUrl 仍不完整");
+});
+
+test("ensureKiloFreeChannel：补种 + 模型刷新 + resolve 空 key", async (t) => {
+  const { service, configService } = await createService();
+  let capturedHeaders: Record<string, string> = {};
+  t.mock.method(globalThis, "fetch", async (_url: unknown, init?: { headers?: unknown }) => {
+    capturedHeaders = { ...((init?.headers as Record<string, string>) ?? {}) };
+    return {
+      ok: true,
+      json: async () => ({ data: [{ id: "a:free" }, { id: "paid-model" }] }),
+    };
+  });
+  const view = await service.ensureKiloFreeChannel();
+  assert.ok(view, "补种成功");
+  assert.equal(view?.providerName, "Kilo 免费");
+  assert.deepEqual(
+    view?.groups.flatMap((group) => [...group.models]),
+    ["a:free"],
+  );
+  assert.ok(!("Authorization" in capturedHeaders), "免费拉取不带 Authorization");
+  const target = await service.resolveRelayTarget({ providerId: view.providerId });
+  assert.equal(target.apiKey, "");
+  assert.ok(target.baseUrl.includes("kilo.ai"));
+  // 幂等：第二次不重复创建
+  const again = await service.ensureKiloFreeChannel();
+  assert.equal(again?.providerId, view.providerId);
+  assert.equal((await service.listChannels()).length, 1);
+  // 回归：成员必须真实落盘（overlay 名单会被领域丢弃，曾导致门禁无模型）。
+  const stored = (configService as unknown as { __getProviders: () => ProviderConfigMap })
+    .__getProviders()
+    .getRule(view.providerId);
+  assert.ok(stored?.config.personalModelIds?.includes("a:free"), "personalModelIds 落盘");
 });

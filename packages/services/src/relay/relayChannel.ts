@@ -54,6 +54,7 @@ export type ResolveRelayTargetInput = z.infer<typeof resolveRelayTargetInputSche
 
 export interface ResolvedRelayTarget {
   readonly baseUrl: string;
+  /** 免费渠道为空字符串（执行层不发 Authorization 头）；普通渠道恒非空。 */
   readonly apiKey: string;
   readonly protocol: RelayChannelResponseProtocol;
   readonly groupId: string;
@@ -66,6 +67,8 @@ export interface IRelayChannelService {
   deleteChannel(providerId: string): Promise<void>;
   fetchChannelModels(input: FetchRelayChannelModelsInput): Promise<readonly string[]>;
   resolveRelayTarget(input: ResolveRelayTargetInput): Promise<ResolvedRelayTarget>;
+  /** Kilo 免费渠道补种（P4，幂等，永不抛错，失败返回 null）。 */
+  ensureKiloFreeChannel(): Promise<RelayChannelView | null>;
   getThreadSelection(threadId: string): Promise<RelayChannelSelection | null>;
   setThreadSelection(
     threadId: string,

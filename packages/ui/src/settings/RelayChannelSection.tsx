@@ -211,7 +211,8 @@ export function RelayChannelSection() {
             {channel.groups.map((group) => (
               <div key={group.groupId} className="flex items-center justify-between text-ui-sm">
                 <span>
-                  {group.groupName} · ×{group.groupRatio} · {group.models.length} 个模型
+                  {group.groupName} · {group.groupRatio === 0 ? "免费" : `×${group.groupRatio}`} ·{" "}
+                  {group.models.length} 个模型
                 </span>
                 <Button
                   size="xs"

@@ -7,7 +7,7 @@
 
 - 中转渠道 = `group: "standard-personal"` 的 personal provider + 可选 `channel` 对象（普通 personal provider 无 `channel`，行为零变化）。
 - `channel`：`{ name?, baseUrl?, status: enabled|disabled, groups: ChannelGroup[], defaultGroupId?, trashedAt? }`。
-- `ChannelGroup`：`{ id, name, baseUrl?, status, groupRatio(>0,默认1), keyMode: single|random|polling(默认single), models: string[], responseProtocol: openai-response|openai|anthropic|gemini(默认openai), contextWindow? }`。密钥不进 config 文件。
+- `ChannelGroup`：`{ id, name, baseUrl?, status, groupRatio(≥0,默认1；0=免费）, keyMode: single|random|polling(默认single), models: string[], responseProtocol: openai-response|openai|anthropic|gemini(默认openai), contextWindow? }`。密钥不进 config 文件。
 - 密钥：`credentialService` key `relay-channel:<providerId>` 存 JSON string[]；读接口只暴露 `apiKeyConfigured + apiKeyPreview(••••后4)`；**更新不传 key = 保留旧 key**。
 - per-thread 选择：`{ providerId, groupId?, model? }`，所有者为 relay 服务（`thread-relay-selection.json`，`withFileLock`，threadId 主键）；UI 只做缓存，服务端权威。
 

@@ -100,7 +100,8 @@ function RelayChannelControlsImpl({
         >
           {activeChannel.groups.map((group) => (
             <option key={group.groupId} value={group.groupId}>
-              {group.groupName}×{group.groupRatio}
+              {group.groupName}
+              {group.groupRatio === 0 ? "免费" : `×${group.groupRatio}`}
             </option>
           ))}
         </select>

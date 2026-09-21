@@ -6,6 +6,7 @@ import { logger } from "@/logger.js";
 
 interface ProviderAvailabilityLoginEntryGuardResult {
   hasUsableProvider: boolean;
+  hasUsableFreeChannel: boolean;
   providerCount: number;
   shouldOpenLoginEntry: boolean;
 }
@@ -40,6 +41,7 @@ export function useProviderAvailabilityLoginEntryGuard({
       if (!enabled) {
         return {
           hasUsableProvider: true,
+          hasUsableFreeChannel: false,
           providerCount: modelSelectionView?.providers.length ?? 0,
           shouldOpenLoginEntry: false,
         } satisfies ProviderAvailabilityLoginEntryGuardResult;
@@ -53,8 +55,11 @@ export function useProviderAvailabilityLoginEntryGuard({
         ? await readModelSelectionView()
         : modelSelectionView;
       const availability = resolveProviderAvailabilityState({ modelSelectionView: refreshedView });
-      const { hasUsableProvider, providerCount } = availability;
-      const shouldOpenLoginEntry = !providerFamilyDomain || (!user && !hasUsableProvider);
+      const { hasUsableProvider, hasUsableFreeChannel, providerCount } = availability;
+      // P4：可用的免费渠道（Kilo）可免登录进入，不需要 domain/user。
+      // 未登录且没有可用模型配置时必须引导用户连接账号或填写 API Key。
+      const shouldOpenLoginEntry =
+        !hasUsableFreeChannel && (!providerFamilyDomain || (!user && !hasUsableProvider));
 
       // 未登录且没有可用模型配置时必须引导用户连接账号或填写 API Key。
       // 启动检查、API Key 设置回流等入口统一走这里，避免各处复制判断后语义分叉。
@@ -63,6 +68,7 @@ export function useProviderAvailabilityLoginEntryGuard({
         source: availability.source,
         providerCount,
         hasUsableProvider,
+        hasUsableFreeChannel,
         hasUser: Boolean(user),
         hasProviderFamilyDomain: Boolean(providerFamilyDomain),
         shouldOpenLoginEntry,
@@ -70,6 +76,7 @@ export function useProviderAvailabilityLoginEntryGuard({
       setLoginEntryOpen(shouldOpenLoginEntry);
       return {
         hasUsableProvider,
+        hasUsableFreeChannel,
         providerCount,
         shouldOpenLoginEntry,
       } satisfies ProviderAvailabilityLoginEntryGuardResult;

@@ -10,6 +10,7 @@ import {
   type OAuthProviderMeta,
   BIGMODEL_PROVIDER_ID,
   TID_LOGIN_USE_API_KEY_BUTTON,
+  TID_LOGIN_SKIP_BUTTON,
   TID_OAUTH_CANCEL,
   TID_OAUTH_ERROR,
   TID_OAUTH_LOGIN_BUTTON,
@@ -348,6 +349,19 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
                   }}
                 >
                   {intl.formatMessage({ id: "login.useApiKey" })}
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="h-10 w-full text-ui-base text-foreground-subtle"
+                  size="lg"
+                  data-testid={TID_LOGIN_SKIP_BUTTON}
+                  onClick={() => {
+                    // 首页跳过：不写任何凭据/运行域，直接进入；
+                    // 免费渠道（Kilo）由 relay 服务后台补种，可用即用。
+                    void onComplete("skip");
+                  }}
+                >
+                  {intl.formatMessage({ id: "login.skip" })}
                 </Button>
               </div>
             ) : null}

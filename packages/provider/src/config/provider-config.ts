@@ -3,6 +3,7 @@ import { ConfigOverlay, type ConfigValidationIssue } from "../config-overlay.js"
 import type { z } from "zod";
 import {
   completeApiKeyAccessDataSchema,
+  completeFreeChannelProviderConfigDataSchema,
   completeZhipuAccountAccessDataSchema,
   completeProviderApiDataSchema,
   completeProviderConfigDataSchema,
@@ -252,6 +253,10 @@ export class ProviderConfig extends ConfigOverlay<ProviderConfig> {
 
   validateComplete(path: readonly string[] = []): readonly ConfigValidationIssue[] {
     // 不再用字段存在性代替值域验证，也不把展示/成员等可选字段变成执行必填项。
+    // 免费中转渠道（channel.free）豁免 access.apiKey，但 api.baseUrl 照常必填。
+    if (this.channel?.free === true) {
+      return validateConfigSchema(completeFreeChannelProviderConfigDataSchema, this.toJSON(), path);
+    }
     return validateConfigSchema(completeProviderConfigDataSchema, this.toJSON(), path);
   }
 

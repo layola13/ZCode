@@ -23,6 +23,8 @@ export const TID_LOGIN_API_KEY_CONTINUE_BUTTON = "login-api-key-continue-button"
 export const TID_LOGIN_API_KEY_CANCEL_BUTTON = "login-api-key-cancel-button";
 /** API Key 登录暂时跳过按钮 */
 export const TID_LOGIN_API_KEY_SKIP_BUTTON = "login-api-key-skip-button";
+/** 登录首页跳过登录按钮（免登录进入，配合免费渠道使用） */
+export const TID_LOGIN_SKIP_BUTTON = "login-skip-button";
 /** API Key 登录错误提示 */
 export const TID_LOGIN_API_KEY_ERROR = "login-api-key-error";
 /** OAuth 弹窗内的登录按钮 */

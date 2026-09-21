@@ -22,7 +22,8 @@ export const relayChannelGroupSchema = z
     name: nonBlankString,
     baseUrl: optionalUrl,
     status: relayChannelStatusSchema.optional(),
-    groupRatio: z.number().positive().nullable().optional(),
+    // 0 = 免费（P4 Kilo，不计费）；>0 为倍率。
+    groupRatio: z.number().nonnegative().nullable().optional(),
     keyMode: relayChannelKeyModeSchema.optional(),
     models: z.array(z.string().min(1)).readonly().nullable().optional(),
     responseProtocol: relayChannelResponseProtocolSchema.optional(),
@@ -35,6 +36,9 @@ export const relayChannelSchema = z
     name: z.string().nullable().optional(),
     baseUrl: optionalUrl,
     status: relayChannelStatusSchema.optional(),
+    // free 渠道（P4 Kilo）：不需要密钥即可执行；completeness 豁免 access.apiKey，
+    // resolve 返回空 key（执行层本就支持无 Authorization 头）。
+    free: z.boolean().optional(),
     groups: z.array(relayChannelGroupSchema).readonly().nullable().optional(),
     defaultGroupId: z.string().min(1).nullable().optional(),
     trashedAt: z.string().nullable().optional(),
